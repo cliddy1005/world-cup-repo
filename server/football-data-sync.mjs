@@ -1,5 +1,5 @@
-const COMPETITION = "WC";
-const SEASON = "2026";
+const COMPETITION = process.env.FOOTBALL_DATA_COMPETITION || "WC";
+const SEASON = process.env.FOOTBALL_DATA_SEASON || "2026";
 
 const LIVE_STATUSES = new Set(["LIVE", "IN_PLAY", "PAUSED"]);
 

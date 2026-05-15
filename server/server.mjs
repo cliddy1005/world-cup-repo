@@ -45,7 +45,7 @@ async function guardedSync(force = false) {
 }
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "..", "public")));
+app.use(express.static(path.join(__dirname, "..", "docs")));
 
 app.get("/api/health", (req, res) => {
   pruneSyncRequestTimes();

@@ -1,5 +1,7 @@
 const COMPETITION = process.env.FOOTBALL_DATA_COMPETITION || "WC";
 const SEASON = process.env.FOOTBALL_DATA_SEASON || "2026";
+const SEASON_START = `${SEASON}-01-01`;
+const SEASON_END = `${SEASON}-12-31`;
 
 const LIVE_STATUSES = new Set(["LIVE", "IN_PLAY", "PAUSED"]);
 
@@ -78,7 +80,12 @@ function splitFixtures(matches) {
 }
 
 export async function fetchFootballDataMatches(token) {
-  const url = `https://api.football-data.org/v4/competitions/${COMPETITION}/matches?season=${SEASON}`;
+  const params = new URLSearchParams({
+    season: SEASON,
+    dateFrom: SEASON_START,
+    dateTo: SEASON_END
+  });
+  const url = `https://api.football-data.org/v4/competitions/${COMPETITION}/matches?${params}`;
   const res = await fetch(url, { headers: { "X-Auth-Token": token } });
   if (!res.ok) {
     const body = await res.text();
@@ -90,7 +97,7 @@ export async function fetchFootballDataMatches(token) {
 export async function syncFootballData({ db, token }) {
   if (!token) throw new Error("FOOTBALL_DATA_TOKEN is not configured");
   const data = await fetchFootballDataMatches(token);
-  const matches = data.matches || [];
+  const matches = (data.matches || []).filter(match => String(match.utcDate || "").startsWith(SEASON));
   const { fixtures, knockout } = splitFixtures(matches);
   const now = new Date().toISOString();
   const liveMatchCount = matches.filter(match => LIVE_STATUSES.has(match.status)).length;
@@ -101,6 +108,8 @@ export async function syncFootballData({ db, token }) {
     source: "football-data.org",
     competition: COMPETITION,
     season: SEASON,
+    dateFrom: SEASON_START,
+    dateTo: SEASON_END,
     lastSyncedAt: now,
     requestCountThisRun: 1,
     matchCount: matches.length,

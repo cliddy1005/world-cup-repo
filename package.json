@@ -1,0 +1,15 @@
+{
+  "name": "wc-pool-football-data",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.mjs",
+    "sync": "node server/sync-once.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.19.2",
+    "firebase-admin": "^13.0.2"
+  }
+}

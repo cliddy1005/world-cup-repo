@@ -1,0 +1,47 @@
+{
+  "rules": {
+    "fixtures": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "knockout": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "meta": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "admins": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true"
+      }
+    },
+    "pools": {
+      ".read": "auth != null",
+      "$poolId": {
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+        "participants": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && (data.exists() || root.child('pools').child($poolId).child('regOpen').val() === true)",
+            ".validate": "newData.hasChildren(['id','name','email','picks','joinedAt']) && newData.child('id').val() === auth.uid"
+          }
+        }
+      }
+    },
+    "predictions": {
+      "$poolId": {
+        ".read": "auth != null && root.child('pools').child($poolId).child('participants').child(auth.uid).exists()",
+        "$dateKey": {
+          "$matchId": {
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid && root.child('pools').child($poolId).child('participants').child(auth.uid).exists()",
+              ".validate": "newData.hasChildren(['uid','name','hs','as','submittedAt']) && newData.child('uid').val() === auth.uid && newData.child('hs').isNumber() && newData.child('as').isNumber() && newData.child('hs').val() >= 0 && newData.child('as').val() >= 0"
+            }
+          }
+        }
+      }
+    }
+  }
+}

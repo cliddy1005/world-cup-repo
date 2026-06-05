@@ -151,12 +151,29 @@ async function loadState(){
 function savePool(pid){if(fbReady&&pid)db.ref("pools/"+pid).set(S.pools[pid])}
 function saveFx(){if(fbReady)db.ref("fixtures").set(S.fixtures)}
 function saveKO(){if(fbReady)db.ref("knockout").set(S.knockout)}
+
+// Debounced render to prevent stack overflow from rapid Firebase updates
+let _renderTimer=null;
+function debouncedRender(){
+  if(_renderTimer)clearTimeout(_renderTimer);
+  _renderTimer=setTimeout(()=>{try{if(cv)render(cv)}catch(e){console.error("Render error:",e)}},100);
+}
+
 function listen(){
   if(!fbReady)return;
-  db.ref("pools").on("value",snap=>{S.pools=snap.val()||{};if(cv)render(cv)});
-  db.ref("fixtures").on("value",snap=>{S.fixtures=snap.val()||{};if(cv)render(cv)});
-  db.ref("knockout").on("value",snap=>{S.knockout=snap.val()||{};if(cv)render(cv)});
-  db.ref("admins").on("value",snap=>{S.admins=snap.val()||{};if(S.user)S.isAdmin=!!S.admins[S.user.uid];if(cv)render(cv)});
+  db.ref("pools").on("value",snap=>{S.pools=snap.val()||{};debouncedRender()});
+  db.ref("fixtures").on("value",snap=>{S.fixtures=snap.val()||{};debouncedRender()});
+  db.ref("knockout").on("value",snap=>{S.knockout=snap.val()||{};debouncedRender()});
+  db.ref("admins").on("value",snap=>{
+    S.admins=snap.val()||{};
+    if(S.user){
+      const v=S.admins[S.user.uid];
+      S.isAdmin=(v===true||v==="true"||v===1);
+      console.log("Admin check:",S.user.uid,"→",S.isAdmin,v);
+      if(S.isAdmin)$("admin-btn")?.classList.remove("hidden");
+    }
+    debouncedRender();
+  });
 }
 
 /* ═══ SCORING ═══ */
@@ -206,12 +223,17 @@ let cv=null;
 const NAV=[{id:"dashboard",ic:"🏠",l:"Home"},{id:"leaderboard",ic:"🏆",l:"Table"},{id:"picks",ic:"⚽",l:"Picks"},{id:"h2h",ic:"⚔️",l:"H2H"},{id:"schedule",ic:"📅",l:"Games"}];
 function buildNav(){$("bnav").innerHTML=NAV.map(n=>`<button onclick="goView('${n.id}')" id="n-${n.id}"><span class="ni">${n.ic}</span><span class="nl">${n.l}</span></button>`).join("")}
 function goView(id){cv=id;render(id);document.querySelectorAll(".bnav button").forEach(b=>b.classList.toggle("act",b.id==="n-"+id));$("mc").scrollTop=0}
-function render(id){const el=$("mc");switch(id){
-  case"dashboard":el.innerHTML=rDash();break;case"leaderboard":el.innerHTML=rLB();break;
-  case"picks":el.innerHTML=rPicks();break;case"h2h":el.innerHTML=rH2H();break;
-  case"schedule":el.innerHTML=rSched();break;case"admin":el.innerHTML=rAdmin();break;
-  case"pool-select":el.innerHTML=rPoolSelect();break;
-}}
+function render(id){
+  const el=$("mc");if(!el)return;
+  try{
+    switch(id){
+      case"dashboard":el.innerHTML=rDash();break;case"leaderboard":el.innerHTML=rLB();break;
+      case"picks":el.innerHTML=rPicks();break;case"h2h":el.innerHTML=rH2H();break;
+      case"schedule":el.innerHTML=rSched();break;case"admin":el.innerHTML=rAdmin();break;
+      case"pool-select":el.innerHTML=rPoolSelect();break;
+    }
+  }catch(e){console.error("Render error ["+id+"]:",e);el.innerHTML=`<div class="cd"><p class="ts tr2">Error rendering view: ${e.message}</p><button class="btn-s btn-o mt8" onclick="location.reload()">Reload</button></div>`}
+}
 function $(id){return document.getElementById(id)}
 
 /* ═══ POOL SELECTION ═══ */
@@ -692,12 +714,20 @@ async function resetPw(){
 function addAdmin(uid){if(!S.isAdmin)return;S.admins[uid]=true;db.ref("admins/"+uid).set(true)}
 function removeAdmin(uid){if(!S.isAdmin||uid===S.user.uid)return;delete S.admins[uid];db.ref("admins/"+uid).remove()}
 
+function checkAdmin(){
+  if(!S.user)return false;
+  const v=S.admins[S.user.uid];
+  return(v===true||v==="true"||v===1);
+}
+
 function enterApp(){
   $("loader").classList.add("hidden");$("app").classList.remove("hidden");$("v-login").classList.add("hidden");$("v-main").classList.remove("hidden");
   $("hdr-user").textContent=S.user.displayName||S.user.email;
+  S.isAdmin=checkAdmin();
+  console.log("User:",S.user.uid,"Admin:",S.isAdmin,"Admins:",JSON.stringify(S.admins));
   if(S.isAdmin)$("admin-btn").classList.remove("hidden");else $("admin-btn").classList.add("hidden");
   buildNav();
-  // Auto-sync scores silently
+  // Auto-sync scores in background (non-blocking)
   syncScoresAuto();
   const saved=localStorage.getItem("wc-active");
   if(saved&&S.pools[saved]&&S.pools[saved].participants?.[S.user.uid]){S.activePool=saved;goView("dashboard")}
@@ -726,7 +756,7 @@ document.addEventListener("DOMContentLoaded",async()=>{
   // Auth state listener
   try{
     firebase.auth().onAuthStateChanged(user=>{
-      if(user){S.user=user;S.isAdmin=!!S.admins[user.uid];enterApp()}
+      if(user){S.user=user;S.isAdmin=checkAdmin();enterApp()}
       else{$("loader").classList.add("hidden");$("app").classList.remove("hidden");$("v-login").classList.remove("hidden");$("v-main").classList.add("hidden")}
     });
   }catch(e){
